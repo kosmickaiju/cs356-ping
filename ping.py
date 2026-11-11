@@ -1,4 +1,3 @@
-
 import socket
 import struct
 import time
@@ -57,30 +56,36 @@ def ping(host):
 
     sock.settimeout(1)
 
+
     try:
         start_time = time.time()
-
+        deadline = start_time + 1.0
+    
         sock.sendto(packet, (destination_ip, 0))
-
+    
         while True:
+            remaining = deadline - time.time()
+    
+            if remaining <= 0:
+                raise socket.timeout()
+    
+            sock.settimeout(remaining)
             response, address = sock.recvfrom(1024)
-
-            # IPv4 header length is encoded in the
-            # lower four bits of the first byte.
+    
             ip_header_length = (response[0] & 0x0F) * 4
-
+    
             icmp_header = response[
                 ip_header_length:ip_header_length + 8
             ]
-
+    
             if len(icmp_header) < 8:
                 continue
-
+    
             reply_type, reply_code, reply_checksum, \
                 reply_ident, reply_seq = struct.unpack(
                     "!BBHHH", icmp_header
                 )
-
+    
             if (
                 address[0] == destination_ip
                 and reply_type == 0
@@ -90,12 +95,12 @@ def ping(host):
             ):
                 end_time = time.time()
                 rtt = (end_time - start_time) * 1000
-
+    
                 print(
                     f"Reply from {destination_ip}: "
                     f"seq={seq} time={rtt:.2f} ms"
                 )
-
+    
                 return rtt
 
     except socket.timeout:
@@ -104,7 +109,6 @@ def ping(host):
 
     finally:
         sock.close()
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("host", help="Hostname or IP address to ping")
