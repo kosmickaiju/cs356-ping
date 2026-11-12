@@ -8,26 +8,19 @@ import argparse
 def checksum(data):
     if len(data) % 2 == 1:
         data += b'\x00'
-
     total = 0
-
     for i in range(0, len(data), 2):
         word = (data[i] << 8) + data[i + 1]
         total += word
-
     while total >> 16:
         total = (total & 0xFFFF) + (total >> 16)
-
     return ~total & 0xFFFF
 
 
 def create_icmp_packet(ident, seq):
     payload = b'CS/ECE-356: ping payload for nl212!'
-
     header = struct.pack("!BBHHH", 8, 0, 0, ident, seq)
-
     packet_checksum = checksum(header + payload)
-
     header = struct.pack(
         "!BBHHH",
         8,
@@ -36,56 +29,39 @@ def create_icmp_packet(ident, seq):
         ident,
         seq
     )
-
     return header + payload
-
 
 def ping(host):
     destination_ip = socket.gethostbyname(host)
-
     ident = os.getpid() & 0xFFFF
     seq = 1
-
     packet = create_icmp_packet(ident, seq)
-
     sock = socket.socket(
         socket.AF_INET,
         socket.SOCK_RAW,
         socket.IPPROTO_ICMP
     )
-
     sock.settimeout(1)
-
-
     try:
         start_time = time.time()
         deadline = start_time + 1.0
-    
         sock.sendto(packet, (destination_ip, 0))
-    
         while True:
             remaining = deadline - time.time()
-    
             if remaining <= 0:
                 raise socket.timeout()
-    
             sock.settimeout(remaining)
             response, address = sock.recvfrom(1024)
-    
             ip_header_length = (response[0] & 0x0F) * 4
-    
             icmp_header = response[
                 ip_header_length:ip_header_length + 8
             ]
-    
             if len(icmp_header) < 8:
                 continue
-    
             reply_type, reply_code, reply_checksum, \
                 reply_ident, reply_seq = struct.unpack(
                     "!BBHHH", icmp_header
                 )
-    
             if (
                 address[0] == destination_ip
                 and reply_type == 0
@@ -95,33 +71,24 @@ def ping(host):
             ):
                 end_time = time.time()
                 rtt = (end_time - start_time) * 1000
-    
                 print(
                     f"Reply from {destination_ip}: "
                     f"seq={seq} time={rtt:.2f} ms"
                 )
-    
                 return rtt
-
     except socket.timeout:
         print(f"Request timeout for seq={seq}")
         return None
-
     finally:
         sock.close()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("host", help="Hostname or IP address to ping")
-
 args = parser.parse_args()
-
 host = args.host
 destination_ip = socket.gethostbyname(host)
-
 print(f"Pinging {host} ({destination_ip}) with 1 packets:")
-
 rtt = ping(host)
-
 print("\n--- Ping Statistics ---")
 
 if rtt is not None:
